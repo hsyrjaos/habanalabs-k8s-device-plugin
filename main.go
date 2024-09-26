@@ -25,7 +25,6 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	hlml "github.com/HabanaAI/gohlml"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -56,13 +55,16 @@ func run(log *slog.Logger) error {
 	restart := true
 	log.Info("Started Habana device plugin manager", "version", build)
 
+	// Use the wrapper (real or dummy based on environment variable)
+	hlmlWrapper := getHLMLWrapper()
+
 	log.Info("Initializing HLML...")
-	if err := hlml.Initialize(); err != nil {
+	if err := hlmlWrapper.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize HLML: %w", err)
 	}
 	defer func() {
-		log.Info("Shutting down hlml")
-		err := hlml.Shutdown()
+		log.Info("Shutting down HLML")
+		err := hlmlWrapper.Shutdown()
 		if err != nil {
 			log.Error(err.Error())
 		}
@@ -78,7 +80,7 @@ func run(log *slog.Logger) error {
 	log.Info("Starting OS watcher...")
 	sigs := newOSWatcher(syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	dev, err := hlml.GetDeviceTypeName()
+	dev, err := hlmlWrapper.GetDeviceTypeName()
 	if err != nil {
 		return fmt.Errorf("failed detecting Habana's devices on the system: %w", err)
 	}
@@ -98,7 +100,7 @@ L:
 				log.Warn("Failed stopping device plugin gracefully", "error", err)
 			}
 
-			numDevices, err := hlml.DeviceCount()
+			numDevices, err := hlmlWrapper.DeviceCount()
 			if err != nil {
 				return fmt.Errorf("failed getting number of devices: %w", err)
 			}
