@@ -29,7 +29,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	hlml "github.com/HabanaAI/gohlml"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -204,6 +203,8 @@ func (m *HabanalabsDevicePlugin) unhealthy(dev *pluginapi.Device) {
 func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	devs := m.devs
 	response := pluginapi.AllocateResponse{ContainerResponses: []*pluginapi.ContainerAllocateResponse{}}
+	hlmlWrapper := getHLMLWrapper() // Use wrapper to handle device interactions
+
 	for _, req := range reqs.ContainerRequests {
 		var devicesList []*pluginapi.DeviceSpec
 		netConfig := make([]string, 0, len(req.DevicesIDs))
@@ -219,7 +220,7 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 			m.log.Info("Preparing device for registration", "device", device)
 
 			m.log.Info("Getting device handle from hlml")
-			deviceHandle, err := hlml.DeviceHandleBySerial(id)
+			deviceHandle, err := hlmlWrapper.DeviceHandleBySerial(id)
 			if err != nil {
 				m.log.Error(err.Error())
 				return nil, err
