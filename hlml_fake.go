@@ -1,5 +1,6 @@
-//go:build !hlml
-// +build !hlml
+// hlml_fake.go
+//go:build !realhlml
+// +build !realhlml
 
 package main
 
@@ -13,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-var pciBasePath = "/sys/bus/pci/devices"
 
 // Device struct is a placeholder for the actual device.
 // Define Device struct with fields like PCIID, SerialNumber, UUID, etc.
@@ -38,7 +37,8 @@ type Event struct {
 }
 
 // EventType is a dummy implementation of the HLML event type
-type EventType uint64
+//type EventType int
+
 type HLMLReturn int
 
 // EventType defines the type of event
@@ -60,8 +60,8 @@ const (
 	HLML_ERROR_UNKNOWN             HLMLReturn = 49
 )
 
-// DummyHLML simulates the HLML library behavior
-type DummyHLML struct{}
+// FakeHlml simulates the HLML library behavior
+type FakeHlml struct{}
 
 var (
 	ErrNotIntialized      = errors.New("hlml not initialized")
@@ -76,6 +76,13 @@ var (
 	ErrNoData             = errors.New("no data")
 	ErrUnknownError       = errors.New("unknown error")
 )
+
+var pciBasePath = "/sys/bus/pci/devices"
+
+// getHlml returns the fake HLML implementation when `realhlml` build tag is not used.
+func getHlml() Hlml {
+	return &FakeHlml{}
+}
 
 // errorString translates the HLML return code into a Go error
 func errorString(ret HLMLReturn) error {
@@ -109,18 +116,18 @@ func errorString(ret HLMLReturn) error {
 }
 
 // Initialize simulates the initialization of the HLML library
-func (d *DummyHLML) Initialize() error {
+func (d *FakeHlml) Initialize() error {
 	// Simulate a successful initialization
 	return errorString(HLML_SUCCESS)
 }
 
 // Shutdown simulates the shutdown of the HLML library in the dummy implementation
-func (d *DummyHLML) Shutdown() error {
+func (d *FakeHlml) Shutdown() error {
 	// Simulate a successful shutdown
 	return errorString(HLML_SUCCESS)
 }
 
-func (d *DummyHLML) GetDeviceTypeName() (string, error) {
+func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 	var deviceType string
 
 	err := filepath.Walk(pciBasePath, func(path string, info os.FileInfo, err error) error {
@@ -163,14 +170,14 @@ func (d *DummyHLML) GetDeviceTypeName() (string, error) {
 }
 
 // DeviceCount simulates the retrieval of the number of Habana devices in the system
-func (d *DummyHLML) DeviceCount() (uint, error) {
+func (d *FakeHlml) DeviceCount() (uint, error) {
 	// Simulate having 4 devices in the system and return success
 	const simulatedDeviceCount uint = 8
 	return simulatedDeviceCount, errorString(HLML_SUCCESS)
 }
 
 // DeviceHandleBySerial simulates getting a handle to a particular device by serial number
-func (d *DummyHLML) DeviceHandleBySerial(serial string) (*Device, error) {
+func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 	// Simulated devices with serial numbers and other attributes
 	simulatedDevices := map[string]*Device{
 		"dummy-serial-1": {
@@ -208,6 +215,27 @@ func (d *DummyHLML) DeviceHandleBySerial(serial string) (*Device, error) {
 			pciBusID:     "0000:00:1f.5",
 			numaNode:     5,
 		},
+		"dummy-serial-6": {
+			serialNumber: "dummy-serial-6",
+			uuid:         "uuid-6",
+			pciID:        "0x8091",
+			pciBusID:     "0000:00:1f.6",
+			numaNode:     5,
+		},
+		"dummy-serial-7": {
+			serialNumber: "dummy-serial-7",
+			uuid:         "uuid-7",
+			pciID:        "0x8092",
+			pciBusID:     "0000:00:1f.7",
+			numaNode:     5,
+		},
+		"dummy-serial-8": {
+			serialNumber: "dummy-serial-8",
+			uuid:         "uuid-8",
+			pciID:        "0x8093",
+			pciBusID:     "0000:00:1f.8",
+			numaNode:     5,
+		},
 	}
 
 	// Check if the device with the given serial number exists
@@ -218,28 +246,28 @@ func (d *DummyHLML) DeviceHandleBySerial(serial string) (*Device, error) {
 	// Return an error if the device is not found
 	return nil, errors.New("could not find device with serial number")
 }
-func (d *DummyHLML) NewEventSet() *EventSet {
+func (d *FakeHlml) NewEventSet() *EventSet {
 	// In the dummy implementation, we simply return an empty EventSet struct
 	return &EventSet{}
 }
 
-func (d *DummyHLML) DeleteEventSet(es *EventSet) {
+func (d *FakeHlml) DeleteEventSet(es *EventSet) {
 	// In the dummy implementation, we do nothing
 }
 
 // func RegisterEventForDevice(es EventSet, event int, uuid string) error {
-func (d *DummyHLML) RegisterEventForDevice(es *EventSet, event EventType, uuid string) error {
+func (d *FakeHlml) RegisterEventForDevice(es *EventSet, event int, uuid string) error {
 	// In the dummy implementation, we return success
 	return errorString(HLML_SUCCESS)
 }
 
-func (d *DummyHLML) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
+func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
 	// In the dummy implementation, we return a dummy event
 	return &Event{}, errorString(HLML_SUCCESS)
 }
 
 // DeviceHandleByIndex simulates getting a handle to a device by its index
-func (d *DummyHLML) DeviceHandleByIndex(index uint) (*Device, error) {
+func (d *FakeHlml) DeviceHandleByIndex(index uint) (Device, error) {
 	// Simulated devices with serial numbers and other attributes
 	simulatedDevices := map[uint]*Device{
 		0: {
@@ -277,19 +305,40 @@ func (d *DummyHLML) DeviceHandleByIndex(index uint) (*Device, error) {
 			pciBusID:     "0000:00:1f.5",
 			numaNode:     5,
 		},
+		5: {
+			serialNumber: "dummy-serial-6",
+			uuid:         "uuid-6",
+			pciID:        "0x8091",
+			pciBusID:     "0000:00:1f.6",
+			numaNode:     6,
+		},
+		6: {
+			serialNumber: "dummy-serial-7",
+			uuid:         "uuid-7",
+			pciID:        "0x8092",
+			pciBusID:     "0000:00:1f.7",
+			numaNode:     7,
+		},
+		7: {
+			serialNumber: "dummy-serial-8",
+			uuid:         "uuid-8",
+			pciID:        "0x8093",
+			pciBusID:     "0000:00:1f.8",
+			numaNode:     8,
+		},
 	}
 
 	// Check if the device with the given index exists
 	if device, found := simulatedDevices[index]; found {
-		return device, nil
+		return *device, nil
+	} else {
+		// Return an error if the device is not found
+		return Device{}, errors.New("could not find device with index")
 	}
-
-	// Return an error if the device is not found
-	return nil, errors.New("could not find device with index")
 }
 
 // GetCriticalErrorCode returns a simulated critical error code
-func (d *DummyHLML) HlmlCriticalError() uint64 {
+func (d *FakeHlml) HlmlCriticalError() uint64 {
 	return 1 << 1 // Dummy value for HlmlCriticalError (same as #define HLML_EVENT_CRITICAL_ERR (1 << 1))
 }
 
@@ -381,7 +430,7 @@ func (d Device) NumaNode() (*uint, error) {
 		return nil, err
 	}
 
-	b, err := os.ReadFile(fmt.Sprintf("/sys/bus/pci/devices/%s/numa_node", strings.ToLower(busID)))
+	b, err := os.ReadFile(fmt.Sprintf(pciBasePath+"/%s/numa_node", strings.ToLower(busID)))
 	if err != nil {
 		// report nil if NUMA support isn't enabled
 		return nil, nil

@@ -28,10 +28,16 @@ import (
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
+// Define a global variable
+var hlml Hlml
+
 // build is overridden with an actual version in the build process.
 var build = "develop"
 
 func main() {
+	// Initialize the global variable
+	hlml = getHlml()
+
 	log := initLogger()
 	if err := run(log); err != nil {
 		log.Error(err.Error())
@@ -55,16 +61,13 @@ func run(log *slog.Logger) error {
 	restart := true
 	log.Info("Started Habana device plugin manager", "version", build)
 
-	// Use the wrapper (real or dummy based on environment variable)
-	hlmlWrapper := getHLMLWrapper()
-
 	log.Info("Initializing HLML...")
-	if err := hlmlWrapper.Initialize(); err != nil {
+	if err := hlml.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize HLML: %w", err)
 	}
 	defer func() {
-		log.Info("Shutting down HLML")
-		err := hlmlWrapper.Shutdown()
+		log.Info("Shutting down hlml")
+		err := hlml.Shutdown()
 		if err != nil {
 			log.Error(err.Error())
 		}
@@ -80,7 +83,7 @@ func run(log *slog.Logger) error {
 	log.Info("Starting OS watcher...")
 	sigs := newOSWatcher(syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	dev, err := hlmlWrapper.GetDeviceTypeName()
+	dev, err := hlml.GetDeviceTypeName()
 	if err != nil {
 		return fmt.Errorf("failed detecting Habana's devices on the system: %w", err)
 	}
@@ -100,7 +103,7 @@ L:
 				log.Warn("Failed stopping device plugin gracefully", "error", err)
 			}
 
-			numDevices, err := hlmlWrapper.DeviceCount()
+			numDevices, err := hlml.DeviceCount()
 			if err != nil {
 				return fmt.Errorf("failed getting number of devices: %w", err)
 			}
