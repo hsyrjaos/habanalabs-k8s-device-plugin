@@ -31,6 +31,8 @@ import (
 // Define a global variable
 var hlml Hlml
 
+var prefix = "/home/hsyrja/works/repos/habanalabs-k8s-device-plugin/tmp"
+
 // build is overridden with an actual version in the build process.
 var build = "develop"
 

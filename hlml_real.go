@@ -1,6 +1,6 @@
 // hlml_real.go
-//go:build realhlml
-// +build realhlml
+//go:build !fakehlml
+// +build !fakehlml
 
 package main
 

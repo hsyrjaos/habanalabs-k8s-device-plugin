@@ -44,7 +44,7 @@ type HabanalabsDevicePlugin struct {
 	devs         []*pluginapi.Device
 }
 
-var devicePath = "/dev/accel"
+var devicePath = prefix + "/dev/accel"
 
 // GetPreferredAllocation returns a preferred set of devices to allocate
 // from a list of available ones. The resulting preferred allocation is not

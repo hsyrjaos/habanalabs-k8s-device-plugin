@@ -73,7 +73,9 @@ func (dm *DeviceManager) Devices() ([]*pluginapi.Device, error) {
 		}
 
 		pciBusID, _ := newDevice.PCIBusID()
+
 		dID := fmt.Sprintf("%x", pciID)
+
 		dm.log.Info(
 			"Device found",
 			"device", strings.ToUpper(dm.devType),

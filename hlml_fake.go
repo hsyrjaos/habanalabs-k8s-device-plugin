@@ -1,6 +1,6 @@
 // hlml_fake.go
-//go:build !realhlml
-// +build !realhlml
+//go:build fakehlml
+// +build fakehlml
 
 package main
 
@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Device struct is a placeholder for the actual device.
@@ -20,24 +22,21 @@ import (
 type Device struct {
 	serialNumber string
 	uuid         string
-	pciID        string
+	pciID        uint
 	pciBusID     string
 	numaNode     int
 	Minor        uint
 	Module       uint
 }
 
-// EventSet is a dummy implementation of the HLML event set
+// EventSet is a fake implementation of the HLML event set
 type EventSet struct{}
 
-// Event is a dummy implementation of the HLML event
+// Event is a fake implementation of the HLML event
 type Event struct {
 	Serial string
 	Etype  uint64
 }
-
-// EventType is a dummy implementation of the HLML event type
-//type EventType int
 
 type HLMLReturn int
 
@@ -77,10 +76,66 @@ var (
 	ErrUnknownError       = errors.New("unknown error")
 )
 
-var pciBasePath = "/sys/bus/pci/devices"
+var pciBasePath = prefix + "/sys/bus/pci/devices"
+
+// Global variables holding the simulated devices
+var (
+	simulatedDevices         map[uint]*Device   // Access devices by index
+	simulatedDevicesBySerial map[string]*Device // Access devices by serial number
+)
+
+// initializeSimulatedDevices initializes the global variable `simulatedDevices` with the specified number of devices.
+func initializeSimulatedDevices(deviceCount uint) {
+	simulatedDevices = make(map[uint]*Device)
+	simulatedDevicesBySerial = make(map[string]*Device)
+
+	for i := uint(0); i < deviceCount; i++ {
+		// Create a new device entry
+		newDevice := &Device{
+			serialNumber: generateRandomSerialNumber(),
+			uuid:         generateRandomUUID(),
+			pciID:        0x1da31020,
+			pciBusID:     fmt.Sprintf("0000:00:1f.%d", i+1), // Create unique PCI Bus IDs based on index
+			numaNode:     int(i),                            // NUMA node assigned sequentially
+		}
+
+		// Store in both maps
+		simulatedDevices[i] = newDevice                              // Store by index
+		simulatedDevicesBySerial[newDevice.serialNumber] = newDevice // Store by serial number
+	}
+}
+
+// generateRandomSerialNumber creates a string like `AN45012345` where the last 4 digits are random.
+func generateRandomSerialNumber() string {
+	const prefix = "AN450"
+	// Generate random last four digits
+	lastFourDigits := fmt.Sprintf("%04d", rand.Intn(10000)) // Random number between 0000 and 9999
+	return prefix + lastFourDigits
+}
+
+// generateRandomUUID creates a string in the format `01P0-HL2080A0-15-TNBS72-05-01-02`.
+func generateRandomUUID() string {
+	const basePrefix = "01P0-HL2080A0-15-TNB"
+
+	// Define possible suffixes
+	suffixes := []string{"S72", "R62", "S51"}
+
+	// Select a random suffix
+	rand.Seed(time.Now().UnixNano())
+	suffix := suffixes[rand.Intn(len(suffixes))]
+
+	// Generate a random date part
+	hour := fmt.Sprintf("%02d", rand.Intn(24))    // Random year between 00-23
+	month := fmt.Sprintf("%02d", rand.Intn(12)+1) // Random month between 01-12
+	day := fmt.Sprintf("%02d", rand.Intn(28)+1)   // Random day between 01-28
+
+	// Construct and return the final UUID string
+	return fmt.Sprintf("%s%s-%s-%s-%s", basePrefix, suffix, month, day, hour)
+}
 
 // getHlml returns the fake HLML implementation when `realhlml` build tag is not used.
 func getHlml() Hlml {
+	initializeSimulatedDevices(8)
 	return &FakeHlml{}
 }
 
@@ -121,7 +176,7 @@ func (d *FakeHlml) Initialize() error {
 	return errorString(HLML_SUCCESS)
 }
 
-// Shutdown simulates the shutdown of the HLML library in the dummy implementation
+// Shutdown simulates the shutdown of the HLML library in the fake implementation
 func (d *FakeHlml) Shutdown() error {
 	// Simulate a successful shutdown
 	return errorString(HLML_SUCCESS)
@@ -130,6 +185,9 @@ func (d *FakeHlml) Shutdown() error {
 func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 	var deviceType string
 
+	fmt.Println("pciBasePath", pciBasePath)
+	fmt.Println("filepath", filepath.Join(pciBasePath))
+	fmt.Println("info")
 	err := filepath.Walk(pciBasePath, func(path string, info os.FileInfo, err error) error {
 		log.Println(pciBasePath, info.Name())
 		if err != nil {
@@ -178,68 +236,8 @@ func (d *FakeHlml) DeviceCount() (uint, error) {
 
 // DeviceHandleBySerial simulates getting a handle to a particular device by serial number
 func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
-	// Simulated devices with serial numbers and other attributes
-	simulatedDevices := map[string]*Device{
-		"dummy-serial-1": {
-			serialNumber: "dummy-serial-1",
-			uuid:         "uuid-1",
-			pciID:        "0x8086",
-			pciBusID:     "0000:00:1f.1",
-			numaNode:     1,
-		},
-		"dummy-serial-2": {
-			serialNumber: "dummy-serial-2",
-			uuid:         "uuid-2",
-			pciID:        "0x8087",
-			pciBusID:     "0000:00:1f.2",
-			numaNode:     2,
-		},
-		"dummy-serial-3": {
-			serialNumber: "dummy-serial-3",
-			uuid:         "uuid-3",
-			pciID:        "0x8088",
-			pciBusID:     "0000:00:1f.3",
-			numaNode:     3,
-		},
-		"dummy-serial-4": {
-			serialNumber: "dummy-serial-4",
-			uuid:         "uuid-4",
-			pciID:        "0x8089",
-			pciBusID:     "0000:00:1f.4",
-			numaNode:     4,
-		},
-		"dummy-serial-5": {
-			serialNumber: "dummy-serial-5",
-			uuid:         "uuid-5",
-			pciID:        "0x8090",
-			pciBusID:     "0000:00:1f.5",
-			numaNode:     5,
-		},
-		"dummy-serial-6": {
-			serialNumber: "dummy-serial-6",
-			uuid:         "uuid-6",
-			pciID:        "0x8091",
-			pciBusID:     "0000:00:1f.6",
-			numaNode:     5,
-		},
-		"dummy-serial-7": {
-			serialNumber: "dummy-serial-7",
-			uuid:         "uuid-7",
-			pciID:        "0x8092",
-			pciBusID:     "0000:00:1f.7",
-			numaNode:     5,
-		},
-		"dummy-serial-8": {
-			serialNumber: "dummy-serial-8",
-			uuid:         "uuid-8",
-			pciID:        "0x8093",
-			pciBusID:     "0000:00:1f.8",
-			numaNode:     5,
-		},
-	}
-
 	// Check if the device with the given serial number exists
-	if device, found := simulatedDevices[serial]; found {
+	if device, found := simulatedDevicesBySerial[serial]; found {
 		return device, nil
 	}
 
@@ -247,87 +245,27 @@ func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 	return nil, errors.New("could not find device with serial number")
 }
 func (d *FakeHlml) NewEventSet() *EventSet {
-	// In the dummy implementation, we simply return an empty EventSet struct
+	// In the fake implementation, we simply return an empty EventSet struct
 	return &EventSet{}
 }
 
 func (d *FakeHlml) DeleteEventSet(es *EventSet) {
-	// In the dummy implementation, we do nothing
+	// In the fake implementation, we do nothing
 }
 
 // func RegisterEventForDevice(es EventSet, event int, uuid string) error {
 func (d *FakeHlml) RegisterEventForDevice(es *EventSet, event int, uuid string) error {
-	// In the dummy implementation, we return success
+	// In the fake implementation, we return success
 	return errorString(HLML_SUCCESS)
 }
 
 func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
-	// In the dummy implementation, we return a dummy event
+	// In the fake implementation, we return a fake event
 	return &Event{}, errorString(HLML_SUCCESS)
 }
 
 // DeviceHandleByIndex simulates getting a handle to a device by its index
 func (d *FakeHlml) DeviceHandleByIndex(index uint) (Device, error) {
-	// Simulated devices with serial numbers and other attributes
-	simulatedDevices := map[uint]*Device{
-		0: {
-			serialNumber: "dummy-serial-1",
-			uuid:         "uuid-1",
-			pciID:        "0x8086",
-			pciBusID:     "0000:00:1f.1",
-			numaNode:     1,
-		},
-		1: {
-			serialNumber: "dummy-serial-2",
-			uuid:         "uuid-2",
-			pciID:        "0x8087",
-			pciBusID:     "0000:00:1f.2",
-			numaNode:     2,
-		},
-		2: {
-			serialNumber: "dummy-serial-3",
-			uuid:         "uuid-3",
-			pciID:        "0x8088",
-			pciBusID:     "0000:00:1f.3",
-			numaNode:     3,
-		},
-		3: {
-			serialNumber: "dummy-serial-4",
-			uuid:         "uuid-4",
-			pciID:        "0x8089",
-			pciBusID:     "0000:00:1f.4",
-			numaNode:     4,
-		},
-		4: {
-			serialNumber: "dummy-serial-5",
-			uuid:         "uuid-5",
-			pciID:        "0x8090",
-			pciBusID:     "0000:00:1f.5",
-			numaNode:     5,
-		},
-		5: {
-			serialNumber: "dummy-serial-6",
-			uuid:         "uuid-6",
-			pciID:        "0x8091",
-			pciBusID:     "0000:00:1f.6",
-			numaNode:     6,
-		},
-		6: {
-			serialNumber: "dummy-serial-7",
-			uuid:         "uuid-7",
-			pciID:        "0x8092",
-			pciBusID:     "0000:00:1f.7",
-			numaNode:     7,
-		},
-		7: {
-			serialNumber: "dummy-serial-8",
-			uuid:         "uuid-8",
-			pciID:        "0x8093",
-			pciBusID:     "0000:00:1f.8",
-			numaNode:     8,
-		},
-	}
-
 	// Check if the device with the given index exists
 	if device, found := simulatedDevices[index]; found {
 		return *device, nil
@@ -339,18 +277,18 @@ func (d *FakeHlml) DeviceHandleByIndex(index uint) (Device, error) {
 
 // GetCriticalErrorCode returns a simulated critical error code
 func (d *FakeHlml) HlmlCriticalError() uint64 {
-	return 1 << 1 // Dummy value for HlmlCriticalError (same as #define HLML_EVENT_CRITICAL_ERR (1 << 1))
+	return 1 << 1 // fake value for HlmlCriticalError (same as #define HLML_EVENT_CRITICAL_ERR (1 << 1))
 }
 
-// MinorNumber simulates returning the Minor number in the dummy implementation
+// MinorNumber simulates returning the Minor number in the fake implementation
 func (d Device) MinorNumber() (uint, error) {
-	// Simulate returning a minor number (hardcoded or configurable in the dummy struct)
+	// Simulate returning a minor number (hardcoded or configurable in the fake struct)
 	return d.Minor, nil
 }
 
-// ModuleID simulates returning the ModuleID in the dummy implementation
+// ModuleID simulates returning the ModuleID in the fake implementation
 func (d Device) ModuleID() (uint, error) {
-	// Simulate returning a module ID (hardcoded or configurable in the dummy struct)
+	// Simulate returning a module ID (hardcoded or configurable in the fake struct)
 	return d.Module, nil
 }
 
@@ -391,10 +329,10 @@ func readIDFromFile(basePath string, deviceAddress string, property string) (str
 	return id, nil
 }
 
-func (d *Device) PCIID() (string, error) {
+func (d *Device) PCIID() (uint, error) {
 	// Return the PCI ID of the device
-	if d.pciID == "" {
-		return "", errors.New("PCIID not available")
+	if &d.pciID == nil {
+		return 0, errors.New("PCIID not available")
 	}
 	return d.pciID, nil
 }
