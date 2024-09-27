@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2024, HabanaLabs Ltd.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package main
 
 import (
@@ -28,9 +43,7 @@ func NewDeviceManager(log *slog.Logger, devType string) *DeviceManager {
 
 // Devices Get Habana Device
 func (dm *DeviceManager) Devices() ([]*pluginapi.Device, error) {
-	hlmlWrapper := getHLMLWrapper() // Choose real or dummy implementation
-
-	NumOfDevices, err := hlmlWrapper.DeviceCount()
+	NumOfDevices, err := hlml.DeviceCount()
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +52,7 @@ func (dm *DeviceManager) Devices() ([]*pluginapi.Device, error) {
 
 	dm.log.Info("Discovering devices...")
 	for i := uint(0); i < NumOfDevices; i++ {
-		newDevice, err := hlmlWrapper.DeviceHandleByIndex(i)
+		newDevice, err := hlml.DeviceHandleByIndex(i)
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +73,9 @@ func (dm *DeviceManager) Devices() ([]*pluginapi.Device, error) {
 		}
 
 		pciBusID, _ := newDevice.PCIBusID()
+
 		dID := fmt.Sprintf("%x", pciID)
+
 		dm.log.Info(
 			"Device found",
 			"device", strings.ToUpper(dm.devType),
@@ -102,13 +117,11 @@ func getDevice(devs []*pluginapi.Device, id string) *pluginapi.Device {
 }
 
 func watchXIDs(ctx context.Context, devs []*pluginapi.Device, xids chan<- *pluginapi.Device) {
-	hlmlWrapper := getHLMLWrapper() // Choose real or dummy implementation
-
-	eventSet := hlmlWrapper.NewEventSet()
-	defer hlmlWrapper.DeleteEventSet(eventSet)
+	eventSet := hlml.NewEventSet()
+	defer hlml.DeleteEventSet(eventSet)
 
 	for _, d := range devs {
-		err := hlmlWrapper.RegisterEventForDevice(eventSet, EventType(hlmlWrapper.HlmlCriticalError()), d.ID)
+		err := hlml.RegisterEventForDevice(eventSet, int(hlml.HlmlCriticalError()), d.ID)
 		if err != nil {
 			slog.Error("Failed registering critical event for device. Marking it unhealthy", "device_id", d.ID, "error", err)
 			xids <- d
@@ -124,18 +137,18 @@ func watchXIDs(ctx context.Context, devs []*pluginapi.Device, xids chan<- *plugi
 		case <-ctx.Done():
 			return
 		case <-healthCheckInterval.C:
-			e, err := hlmlWrapper.WaitForEvent(eventSet, 1000)
+			e, err := hlml.WaitForEvent(eventSet, 1000)
 			if err != nil {
 				slog.Error("hlml WaitForEvent failed", "error", err.Error())
 				time.Sleep(2 * time.Second)
 				continue
 			}
 
-			if e.Etype != hlmlWrapper.HlmlCriticalError() {
+			if e.Etype != hlml.HlmlCriticalError() {
 				continue
 			}
 
-			dev, err := hlmlWrapper.DeviceHandleBySerial(e.Serial)
+			dev, err := hlml.DeviceHandleBySerial(e.Serial)
 			if err != nil {
 				slog.Error("XidCriticalError: All devices will go unhealthy", "xid", e.Etype)
 				// All devices are unhealthy

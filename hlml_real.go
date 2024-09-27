@@ -1,50 +1,70 @@
-// +build hlml
+// hlml_real.go
+//go:build !fakehlml
+// +build !fakehlml
 
 package main
 
 import (
-	hlml "github.com/HabanaAI/gohlml"
+	realhlml "github.com/HabanaAI/gohlml"
 )
 
-type RealHLML struct{}
+type RealHlml struct{}
 
-func (r *RealHLML) Initialize() error {
-	return hlml.Initialize()
+// Type aliasing for the real HLML types to match the interface types
+type Device = realhlml.Device
+type EventSet = realhlml.EventSet
+type Event = realhlml.Event
+
+//type EventType = realhlml.EventType
+
+// getHlml returns the real HLML implementation when `realhlml` build tag is used.
+func getHlml() Hlml {
+	return &RealHlml{}
 }
 
-func (r *RealHLML) Shutdown() error {
-	return hlml.Shutdown()
+func (r *RealHlml) Initialize() error {
+	return realhlml.Initialize()
 }
 
-func (r *RealHLML) GetDeviceTypeName() (string, error) {
-	return hlml.GetDeviceTypeName()
+func (r *RealHlml) Shutdown() error {
+	return realhlml.Shutdown()
 }
 
-func (r *RealHLML) DeviceCount() (uint, error) {
-	return hlml.DeviceCount()
+func (r *RealHlml) GetDeviceTypeName() (string, error) {
+	return realhlml.GetDeviceTypeName()
 }
 
-func (r *RealHLML) DeviceHandleBySerial(serial string) (*hlml.Device, error) {
-	return hlml.DeviceHandleBySerial(serial)
+func (r *RealHlml) DeviceCount() (uint, error) {
+	return realhlml.DeviceCount()
 }
 
-func (r *RealHLML) NewEventSet() *hlml.EventSet {
-	return hlml.NewEventSet()
+func (r *RealHlml) DeviceHandleBySerial(serial string) (*Device, error) {
+	device, err := realhlml.DeviceHandleBySerial(serial)
+	return device, err
 }
 
-func (r *RealHLML) DeleteEventSet(eventSet *hlml.EventSet) {
-	hlml.DeleteEventSet(eventSet)
+func (r *RealHlml) NewEventSet() *EventSet {
+	eventSet := realhlml.NewEventSet()
+	return &eventSet
 }
 
-func (r *RealHLML) RegisterEventForDevice(eventSet *hlml.EventSet, eventType hlml.EventType, serial string) error {
-	return hlml.RegisterEventForDevice(eventSet, eventType, serial)
+func (r *RealHlml) DeleteEventSet(eventSet *EventSet) {
+	realhlml.DeleteEventSet(*eventSet)
 }
 
-func (r *RealHLML) WaitForEvent(eventSet *hlml.EventSet, timeout int) (*hlml.Event, error) {
-	return hlml.WaitForEvent(eventSet, timeout)
+func (r *RealHlml) RegisterEventForDevice(eventSet *EventSet, eventType int, serial string) error {
+	return realhlml.RegisterEventForDevice(*eventSet, eventType, serial)
 }
 
-func (r *RealHLML) DeviceHandleByIndex(index uint) (*hlml.Device, error) {
-    return hlml.DeviceHandleByIndex(index)
+func (r *RealHlml) WaitForEvent(eventSet *EventSet, timeout int) (*Event, error) {
+	event, err := realhlml.WaitForEvent(*eventSet, uint(timeout))
+	return &event, err
 }
 
+func (r *RealHlml) DeviceHandleByIndex(index uint) (Device, error) {
+	return realhlml.DeviceHandleByIndex(index)
+}
+
+func (r *RealHlml) HlmlCriticalError() uint64 {
+	return realhlml.HlmlCriticalError
+}

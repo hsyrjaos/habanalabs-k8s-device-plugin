@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, HabanaLabs Ltd.  All rights reserved.
+ * Copyright (c) 2024, HabanaLabs Ltd.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,8 @@ type HabanalabsDevicePlugin struct {
 	socket       string
 	devs         []*pluginapi.Device
 }
+
+var devicePath = prefix + "/dev/accel"
 
 // GetPreferredAllocation returns a preferred set of devices to allocate
 // from a list of available ones. The resulting preferred allocation is not
@@ -203,8 +205,6 @@ func (m *HabanalabsDevicePlugin) unhealthy(dev *pluginapi.Device) {
 func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	devs := m.devs
 	response := pluginapi.AllocateResponse{ContainerResponses: []*pluginapi.ContainerAllocateResponse{}}
-	hlmlWrapper := getHLMLWrapper() // Use wrapper to handle device interactions
-
 	for _, req := range reqs.ContainerRequests {
 		var devicesList []*pluginapi.DeviceSpec
 		netConfig := make([]string, 0, len(req.DevicesIDs))
@@ -220,7 +220,7 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 			m.log.Info("Preparing device for registration", "device", device)
 
 			m.log.Info("Getting device handle from hlml")
-			deviceHandle, err := hlmlWrapper.DeviceHandleBySerial(id)
+			deviceHandle, err := hlml.DeviceHandleBySerial(id)
 			if err != nil {
 				m.log.Error(err.Error())
 				return nil, err
@@ -240,7 +240,7 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 				return nil, err
 			}
 
-			path := fmt.Sprintf("/dev/accel/accel%d", minor)
+			path := fmt.Sprintf(devicePath+"/accel%d", minor)
 			paths = append(paths, path)
 			uuids = append(uuids, id)
 			netConfig = append(netConfig, fmt.Sprintf("%d", minor))
@@ -252,7 +252,7 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 				Permissions:   "rw",
 			}
 			devicesList = append(devicesList, ds)
-			path = fmt.Sprintf("/dev/accel/accel_controlD%d", minor)
+			path = fmt.Sprintf(devicePath+"/accel_controlD%d", minor)
 
 			ds = &pluginapi.DeviceSpec{
 				ContainerPath: path,
