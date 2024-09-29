@@ -46,10 +46,10 @@ type Device struct {
 	Module       uint
 }
 
-// EventSet is a fake implementation of the HLML event set
+// EventSet is a fake implementation of the HLML event set.
 type EventSet struct{}
 
-// Event is a fake implementation of the HLML event
+// Event is a fake implementation of the HLML event.
 type Event struct {
 	Serial string
 	Etype  uint64
@@ -57,7 +57,7 @@ type Event struct {
 
 type HLMLReturn int
 
-// EventType defines the type of event
+// EventType defines the type of event.
 const HlmlCriticalError = 1 << 1
 
 const (
@@ -76,17 +76,17 @@ const (
 	HLML_ERROR_UNKNOWN             HLMLReturn = 49
 )
 
-// FakeHlml simulates the HLML library behavior
+// FakeHlml simulates the HLML library behavior.
 type FakeHlml struct{}
 
-// FakeDeviceConfig is a struct that used to parse the YAML configuration for the fake devices
+// FakeDeviceConfig is a struct that used to parse the YAML configuration for the fake devices.
 type FakeDeviceConfig struct {
 	Path        string `yaml:"Path"`
-	DeviceCount uint   `yaml:"DeviceCount"`
-	NumaNodes   uint   `yaml:"NumaNodes"`
 	PciID       string `yaml:"PciID"`
 	pciBasePath string
 	devBasePath string
+	DeviceCount uint `yaml:"DeviceCount"`
+	NumaNodes   uint `yaml:"NumaNodes"`
 }
 
 var (
@@ -106,7 +106,7 @@ var (
 var config FakeDeviceConfig
 var prefix string
 
-// updateConfig updates the global `config` variable with the parsed YAML configuration
+// updateConfig updates the global `config` variable with the parsed YAML configuration.
 func updateConfig(yamlConfig string) error {
 	// Parse the YAML string into the Config struct
 	err := yaml.Unmarshal([]byte(yamlConfig), &config)
@@ -121,7 +121,7 @@ func updateConfig(yamlConfig string) error {
 	return nil
 }
 
-// Global variables holding the simulated devices
+// Global variables holding the simulated devices.
 var (
 	simulatedDevices         map[uint]*Device   // Access devices by index
 	simulatedDevicesBySerial map[string]*Device // Access devices by serial number
@@ -132,9 +132,10 @@ func initializeSimulatedDevices(config FakeDeviceConfig) {
 	simulatedDevices = make(map[uint]*Device)
 	simulatedDevicesBySerial = make(map[string]*Device)
 
-	// Create a new random generator instance
+	// Create a new random generator instance.
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	randomHex := rng.Intn(256)
+
 	for i := uint(0); i < config.DeviceCount; i++ {
 		// Create a new device entry
 		newDevice := &Device{
@@ -163,8 +164,11 @@ func initializeSimulatedDevices(config FakeDeviceConfig) {
 // generateRandomSerialNumber creates a string like e.g. `AN45012345` where the last 4 digits are random.
 func generateRandomSerialNumber() string {
 	const baseprefix = "FA450"
-	// Generate random last four digits
-	lastFourDigits := fmt.Sprintf("%04d", rand.Intn(10000)) // Random number between 0000 and 9999
+	// Generate random last four digits.
+	// Create a new random generator instance.
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	lastFourDigits := fmt.Sprintf("%04d", rng.Intn(10000)) // Random number between 0000 and 9999
+
 	return baseprefix + lastFourDigits
 }
 
@@ -202,6 +206,7 @@ PciID: "1da3:1020"
 	fakeAccel := os.Getenv("FAKEACCEL_SPEC")
 	if fakeAccel != "" && fakeAccel != "default" {
 		log.Println("FAKEACCEL_SPEC environment variable detected, using custom Fake Device configuration")
+
 		yamlContent = fakeAccel // Use the value from FAKEACCEL_SPEC environment variable
 	}
 
@@ -212,10 +217,11 @@ PciID: "1da3:1020"
 	}
 
 	initializeSimulatedDevices(config)
+
 	return &FakeHlml{}
 }
 
-// createDeviceNodes creates the device nodes for the specified number of devices
+// createDeviceNodes creates the device nodes for the specified number of devices.
 func createDeviceNodes(path string, count uint) error {
 	// Remove the existing directory (if it exists) before creating a new one
 	if err := os.RemoveAll(path); err != nil {
@@ -245,12 +251,13 @@ func createDeviceNodes(path string, count uint) error {
 	return nil
 }
 
-// createDeviceNode creates a device node with the specified path, major, and minor number
+// createDeviceNode creates a device node with the specified path, major, and minor number.
 func createDeviceNode(path string, major, minor uint32, mode uint32) error {
 	dev := int((major << 8) | minor) // Combine major and minor to create a device ID
 	if err := syscall.Mknod(path, mode, dev); err != nil {
 		return fmt.Errorf("failed to create device node %s: %v", path, err)
 	}
+
 	return nil
 }
 
@@ -324,10 +331,11 @@ func createFilesInDirectory(dir string, index uint, numaNode uint) error {
 			return fmt.Errorf("failed to create file %s: %v", filePath, err)
 		}
 	}
+
 	return nil
 }
 
-// errorString translates the HLML return code into a Go error
+// errorString translates the HLML return code into a Go error.
 func errorString(ret HLMLReturn) error {
 	switch ret {
 	case HLML_SUCCESS, HLML_ERROR_TIMEOUT:
@@ -355,33 +363,38 @@ func errorString(ret HLMLReturn) error {
 	case HLML_ERROR_UNKNOWN:
 		return ErrUnknownError
 	}
+
 	return errors.New("invalid HLML error return code")
 }
 
-// Initialize simulates the initialization of the HLML library
+// Initialize simulates the initialization of the HLML library.
 func (d *FakeHlml) Initialize() error {
 	// Simulate a successful initialization
 	return errorString(HLML_SUCCESS)
 }
 
-// Shutdown simulates the shutdown of the HLML library in the fake implementation
+// Shutdown simulates the shutdown of the HLML library in the fake implementation.
 func (d *FakeHlml) Shutdown() error {
 	// Simulate a successful shutdown
 	return errorString(HLML_SUCCESS)
 }
 
-// GetDeviceTypeName simulates the retrieval of the device type name in the fake implementation
+// GetDeviceTypeName simulates the retrieval of the device type name in the fake implementation.
 func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 	var deviceType string
+
 	err := filepath.Walk(config.pciBasePath, func(path string, info os.FileInfo, err error) error {
 		log.Println(config.pciBasePath, info.Name())
+
 		if err != nil {
 			return fmt.Errorf("error accessing file path %q", path)
 		}
+
 		if info.IsDir() {
 			log.Println("Not a device, continuing")
 			return nil
 		}
+
 		// Retrieve vendor for the device
 		vendorID, err := readIDFromFile(config.pciBasePath, info.Name(), "vendor")
 		if err != nil {
@@ -405,6 +418,7 @@ func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 
 		return nil
 	})
+
 	if err != nil {
 		return "", err
 	}
@@ -412,13 +426,13 @@ func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 	return deviceType, nil
 }
 
-// DeviceCount simulates the retrieval of the number of Habana devices in the system
+// DeviceCount simulates the retrieval of the number of Habana devices in the system.
 func (d *FakeHlml) DeviceCount() (uint, error) {
 	// Simulate returning the number of devices
 	return config.DeviceCount, errorString(HLML_SUCCESS)
 }
 
-// DeviceHandleBySerial simulates getting a handle to a particular device by serial number
+// DeviceHandleBySerial simulates getting a handle to a particular device by serial number.
 func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 	// Check if the device with the given serial number exists
 	if device, found := simulatedDevicesBySerial[serial]; found {
@@ -429,30 +443,30 @@ func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 	return nil, errors.New("could not find device with serial number")
 }
 
-// NewEventSet simulates creating a new event set in the fake implementation
+// NewEventSet simulates creating a new event set in the fake implementation.
 func (d *FakeHlml) NewEventSet() *EventSet {
 	// In the fake implementation, we simply return an empty EventSet struct
 	return &EventSet{}
 }
 
-// DeleteEventSet simulates deleting an event set in the fake implementation
+// DeleteEventSet simulates deleting an event set in the fake implementation.
 func (d *FakeHlml) DeleteEventSet(es *EventSet) {
 	// In the fake implementation, we do nothing
 }
 
-// func RegisterEventForDevice(es EventSet, event int, uuid string) error {
+// RegisterEventForDevice simulates registering an event for a device in the fake implementation.
 func (d *FakeHlml) RegisterEventForDevice(es *EventSet, event int, uuid string) error {
 	// In the fake implementation, we return success
 	return errorString(HLML_SUCCESS)
 }
 
-// WaitForEvent simulates waiting for an event in the fake implementation
+// WaitForEvent simulates waiting for an event in the fake implementation.
 func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
 	// In the fake implementation, we return a fake event
 	return &Event{}, errorString(HLML_SUCCESS)
 }
 
-// DeviceHandleByIndex simulates getting a handle to a device by its index
+// DeviceHandleByIndex simulates getting a handle to a device by its index.
 func (d *FakeHlml) DeviceHandleByIndex(index uint) (Device, error) {
 	// Check if the device with the given index exists
 	if device, found := simulatedDevices[index]; found {
@@ -463,25 +477,25 @@ func (d *FakeHlml) DeviceHandleByIndex(index uint) (Device, error) {
 	}
 }
 
-// GetCriticalErrorCode returns a simulated critical error code
+// GetCriticalErrorCode returns a simulated critical error code.
 func (d *FakeHlml) HlmlCriticalError() uint64 {
-	return 1 << 1 // fake value for HlmlCriticalError (same as #define HLML_EVENT_CRITICAL_ERR (1 << 1))
+	return 1 << 1
 }
 
-// MinorNumber simulates returning the Minor number in the fake implementation
+// MinorNumber simulates returning the Minor number in the fake implementation.
 func (d Device) MinorNumber() (uint, error) {
 	// Simulate returning a minor number (hardcoded or configurable in the fake struct)
 	// We return the Minor number divided by 2 due to the way numbers are generated in the real implementation
 	return d.Minor >> 1, nil
 }
 
-// ModuleID simulates returning the ModuleID in the fake implementation
+// ModuleID simulates returning the ModuleID in the fake implementation.
 func (d Device) ModuleID() (uint, error) {
 	// Simulate returning a module ID (hardcoded or configurable in the fake struct)
 	return d.Module, nil
 }
 
-// getDeviceName returns the name of the device based on the device ID
+// getDeviceName returns the name of the device based on the device ID.
 func getDeviceName(deviceID string) (string, error) {
 	goya := []string{"0001"}
 	// Gaudi family includes Gaudi 1 and Guadi 2
@@ -500,27 +514,30 @@ func getDeviceName(deviceID string) (string, error) {
 	}
 }
 
-// checkFamily checks if the device ID belongs to the specified family
+// checkFamily checks if the device ID belongs to the specified family.
 func checkFamily(family []string, id string) bool {
 	for _, m := range family {
 		if strings.HasSuffix(id, m) {
 			return true
 		}
 	}
+
 	return false
 }
 
-// readIDFromFile reads the ID from the specified file
+// readIDFromFile reads the ID from the specified file.
 func readIDFromFile(basePath string, deviceAddress string, property string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(basePath, deviceAddress, property))
 	if err != nil {
 		return "", fmt.Errorf("could not read %s for device %s: %w", property, deviceAddress, err)
 	}
+
 	id := strings.Trim(string(data[2:]), "\n")
+
 	return id, nil
 }
 
-// PCIID returns the PCI ID of the device
+// PCIID returns the PCI ID of the device.
 func (d *Device) PCIID() (uint, error) {
 	// Split the vendor and device parts
 	vendor, device := strings.Split(d.pciID, ":")[0], strings.Split(d.pciID, ":")[1]
@@ -528,6 +545,7 @@ func (d *Device) PCIID() (uint, error) {
 	// Combine the parts into a single hexadecimal string and convert it to a number
 	combinedHex := "0x" + vendor + device
 	result, err := strconv.ParseUint(combinedHex, 0, 64)
+
 	if err != nil {
 		log.Fatalf("Failed to parse combined hex string: %v\n", err)
 		return 0, err
@@ -536,30 +554,33 @@ func (d *Device) PCIID() (uint, error) {
 	return uint(result), nil
 }
 
-// SerialNumber returns the Serial Number of the device
+// SerialNumber returns the Serial Number of the device.
 func (d *Device) SerialNumber() (string, error) {
 	// Return the Serial Number of the device
 	if d.serialNumber == "" {
 		return "", errors.New("SerialNumber not available")
 	}
+
 	return d.serialNumber, nil
 }
 
-// UUID returns the UUID of the device
+// UUID returns the UUID of the device.
 func (d *Device) UUID() (string, error) {
 	// Return the UUID of the device
 	if d.uuid == "" {
 		return "", errors.New("UUID not available")
 	}
+
 	return d.uuid, nil
 }
 
-// PCIBusID returns the PCI Bus ID of the device
+// PCIBusID returns the PCI Bus ID of the device.
 func (d *Device) PCIBusID() (string, error) {
 	// Return the PCI Bus ID of the device
 	if d.pciBusID == "" {
 		return "", errors.New("PCIBusID not available")
 	}
+
 	return d.pciBusID, nil
 }
 
@@ -575,14 +596,17 @@ func (d Device) NumaNode() (*uint, error) {
 		// report nil if NUMA support isn't enabled
 		return nil, nil
 	}
+
 	node, err := strconv.ParseInt(string(bytes.TrimSpace(b)), 10, 8)
 	if err != nil {
 		return nil, fmt.Errorf("%v: %v", errors.New("failed to retrieve CPU affinity"), err)
 	}
+
 	if node < 0 {
 		return nil, nil
 	}
 
 	numaNode := uint(node)
+
 	return &numaNode, nil
 }
