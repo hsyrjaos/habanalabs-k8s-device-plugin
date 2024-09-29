@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hl-smi-fake
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: ["sh", "-c", "ls -al /tmp/gaudi2/dev/accel/; sleep 3600"]
+    resources:
+      limits:
+        habana.ai/gaudi: 2

@@ -44,7 +44,7 @@ type HabanalabsDevicePlugin struct {
 	devs         []*pluginapi.Device
 }
 
-var devicePath = prefix + "/dev/accel"
+var devicePath = "/dev/accel"
 
 // GetPreferredAllocation returns a preferred set of devices to allocate
 // from a list of available ones. The resulting preferred allocation is not
@@ -225,6 +225,7 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 				m.log.Error(err.Error())
 				return nil, err
 			}
+			m.log.Info("Got device handle from hlml", "device", deviceHandle)
 
 			m.log.Info("Getting device minor number")
 			minor, err := deviceHandle.MinorNumber()
@@ -232,6 +233,7 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 				m.log.Error(err.Error())
 				return nil, err
 			}
+			m.log.Info("Got device minor number", "minor", minor)
 
 			m.log.Info("Getting device module id")
 			moduleID, err := deviceHandle.ModuleID()
@@ -239,8 +241,9 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 				m.log.Error(err.Error())
 				return nil, err
 			}
+			m.log.Info("Got device module id", "module_id", moduleID)
 
-			path := fmt.Sprintf(devicePath+"/accel%d", minor)
+			path := fmt.Sprintf(prefix+devicePath+"/accel%d", minor)
 			paths = append(paths, path)
 			uuids = append(uuids, id)
 			netConfig = append(netConfig, fmt.Sprintf("%d", minor))
@@ -252,7 +255,7 @@ func (m *HabanalabsDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.A
 				Permissions:   "rw",
 			}
 			devicesList = append(devicesList, ds)
-			path = fmt.Sprintf(devicePath+"/accel_controlD%d", minor)
+			path = fmt.Sprintf(prefix+devicePath+"/accel_controlD%d", minor)
 
 			ds = &pluginapi.DeviceSpec{
 				ContainerPath: path,
