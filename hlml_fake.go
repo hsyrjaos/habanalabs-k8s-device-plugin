@@ -57,25 +57,6 @@ type Event struct {
 
 type HLMLReturn int
 
-// EventType defines the type of event.
-const HlmlCriticalError = 1 << 1
-
-const (
-	HLML_SUCCESS                   HLMLReturn = 0
-	HLML_ERROR_UNINITIALIZED       HLMLReturn = 1
-	HLML_ERROR_INVALID_ARGUMENT    HLMLReturn = 2
-	HLML_ERROR_NOT_SUPPORTED       HLMLReturn = 3
-	HLML_ERROR_ALREADY_INITIALIZED HLMLReturn = 5
-	HLML_ERROR_NOT_FOUND           HLMLReturn = 6
-	HLML_ERROR_INSUFFICIENT_SIZE   HLMLReturn = 7
-	HLML_ERROR_DRIVER_NOT_LOADED   HLMLReturn = 9
-	HLML_ERROR_TIMEOUT             HLMLReturn = 10
-	HLML_ERROR_AIP_IS_LOST         HLMLReturn = 15
-	HLML_ERROR_MEMORY              HLMLReturn = 20
-	HLML_ERROR_NO_DATA             HLMLReturn = 21
-	HLML_ERROR_UNKNOWN             HLMLReturn = 49
-)
-
 // FakeHlml simulates the HLML library behavior.
 type FakeHlml struct{}
 
@@ -89,31 +70,59 @@ type FakeDeviceConfig struct {
 	NumaNodes   uint `yaml:"NumaNodes"`
 }
 
+// EventType defines the type of event.
+const HlmlCriticalError = 1 << 1
+
+// HlmlSuccess defines the success return code to fake device no errors needed.
+const HlmlSuccess HLMLReturn = 0
+
 var (
-	ErrNotIntialized      = errors.New("hlml not initialized")
-	ErrInvalidArgument    = errors.New("invalid argument")
-	ErrNotSupported       = errors.New("not supported")
-	ErrAlreadyInitialized = errors.New("hlml already initialized")
-	ErrNotFound           = errors.New("not found")
-	ErrInsufficientSize   = errors.New("insufficient size")
-	ErrDriverNotLoaded    = errors.New("driver not loaded")
-	ErrAipIsLost          = errors.New("aip is lost")
-	ErrMemoryError        = errors.New("memory error")
-	ErrNoData             = errors.New("no data")
-	ErrUnknownError       = errors.New("unknown error")
+	ErrInvalidHlmlErrorCode        = errors.New("invalid HLML error return code")
+	ErrParsingConfig               = errors.New("error parsing config file")
+	ErrRemoveExistingDirectory     = errors.New("failed to remove existing directory")
+	ErrCreateDirectory             = errors.New("failed to create directory")
+	ErrCreateDeviceNode            = errors.New("failed to create device node")
+	ErrCreateTargetDirectory       = errors.New("failed to create target directory")
+	ErrCreateSymlink               = errors.New("failed to create symlink")
+	ErrCreateFilesInDirectory      = errors.New("failed to create files in directory")
+	ErrCreateFile                  = errors.New("failed to create file")
+	ErrAccessFilePath              = errors.New("error accessing file path")
+	ErrCouldNotFindDeviceBySerial  = errors.New("could not find device with serial number")
+	ErrCouldNotFindDeviceByIndex   = errors.New("could not find device with index")
+	ErrNoHabanaDevices             = errors.New("no habana devices on the system")
+	ErrSerialNumberUnavailable     = errors.New("SerialNumber not available")
+	ErrUUIDUnavailable             = errors.New("UUID not available")
+	ErrPCIBusIDUnavailable         = errors.New("PCIBusID not available")
+	ErrFailedToRetrieveCPUAffinity = errors.New("failed to retrieve CPU affinity")
 )
 
-var config FakeDeviceConfig
-var prefix string
+// Global variables holding the simulated devices.
+var (
+	config                   FakeDeviceConfig
+	prefix                   string
+	simulatedDevices         map[uint]*Device   // Access devices by index
+	simulatedDevicesBySerial map[string]*Device // Access devices by serial number
+)
+
+// errorString translates the HLML return code into a Go error.
+func errorString(ret HLMLReturn) error {
+	switch ret {
+	case HlmlSuccess:
+		return nil
+	}
+
+	return ErrInvalidHlmlErrorCode
+}
 
 // updateConfig updates the global `config` variable with the parsed YAML configuration.
 func updateConfig(yamlConfig string) error {
 	// Parse the YAML string into the Config struct
 	err := yaml.Unmarshal([]byte(yamlConfig), &config)
 	if err != nil {
-		return fmt.Errorf("error parsing config file: %v", err)
+		return fmt.Errorf("%w: %v", ErrParsingConfig, err)
 	}
 
+	// Update the global config variables
 	config.pciBasePath = config.Path + "/sys/bus/pci/devices"
 	config.devBasePath = config.Path + "/dev/accel"
 	prefix = config.Path
@@ -121,19 +130,13 @@ func updateConfig(yamlConfig string) error {
 	return nil
 }
 
-// Global variables holding the simulated devices.
-var (
-	simulatedDevices         map[uint]*Device   // Access devices by index
-	simulatedDevicesBySerial map[string]*Device // Access devices by serial number
-)
-
 // initializeSimulatedDevices initializes the global variable `simulatedDevices` with the specified number of devices.
 func initializeSimulatedDevices(config FakeDeviceConfig) {
 	simulatedDevices = make(map[uint]*Device)
 	simulatedDevicesBySerial = make(map[string]*Device)
 
 	// Create a new random generator instance.
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
 	randomHex := rng.Intn(256)
 
 	for i := uint(0); i < config.DeviceCount; i++ {
@@ -166,7 +169,7 @@ func generateRandomSerialNumber() string {
 	const baseprefix = "FA450"
 	// Generate random last four digits.
 	// Create a new random generator instance.
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
 	lastFourDigits := fmt.Sprintf("%04d", rng.Intn(10000)) // Random number between 0000 and 9999
 
 	return baseprefix + lastFourDigits
@@ -180,7 +183,7 @@ func generateRandomUUID() string {
 	suffixes := []string{"EL2", "EL2", "EL1"}
 
 	// Create a new random generator instance
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
 
 	// Select a random suffix using the local random generator
 	suffix := suffixes[rng.Intn(len(suffixes))]
@@ -225,12 +228,12 @@ PciID: "1da3:1020"
 func createDeviceNodes(path string, count uint) error {
 	// Remove the existing directory (if it exists) before creating a new one
 	if err := os.RemoveAll(path); err != nil {
-		return fmt.Errorf("failed to remove existing directory %s: %v", path, err)
+		return fmt.Errorf("%w %s: %v", ErrRemoveExistingDirectory, path, err)
 	}
 
 	// Create the target directory if it does not exist
 	if err := os.MkdirAll(path, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %v", path, err)
+		return fmt.Errorf("%w %s: %v", ErrCreateDirectory, path, err)
 	}
 
 	// Loop to create `accel` and `accel_controlD` device nodes
@@ -255,7 +258,7 @@ func createDeviceNodes(path string, count uint) error {
 func createDeviceNode(path string, major, minor uint32, mode uint32) error {
 	dev := int((major << 8) | minor) // Combine major and minor to create a device ID
 	if err := syscall.Mknod(path, mode, dev); err != nil {
-		return fmt.Errorf("failed to create device node %s: %v", path, err)
+		return fmt.Errorf("%w, %s: %v", ErrCreateDeviceNode, path, err)
 	}
 
 	return nil
@@ -265,18 +268,18 @@ func createDeviceNode(path string, major, minor uint32, mode uint32) error {
 func createSymlinkedDirectories(path string, count uint, numaNodes uint) error {
 	// Remove the existing directory (if it exists) before creating a new one
 	if err := os.RemoveAll(path); err != nil {
-		return fmt.Errorf("failed to remove existing directory %s: %v", path, err)
+		return fmt.Errorf("%w %s: %v", ErrRemoveExistingDirectory, path, err)
 	}
 
 	// Create the target directory if it does not exist
 	if err := os.MkdirAll(path, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %v", path, err)
+		return fmt.Errorf("%w %s: %v", ErrCreateDirectory, path, err)
 	}
 
 	// Calculate how many devices per NUMA node
 	devicesPerNode := count / numaNodes
 	if devicesPerNode < 1 {
-		devicesPerNode = 1
+		devicesPerNode = 1 // Ensure at least one device per NUMA node to avoid division by zero
 	}
 
 	for i := uint(1); i <= count; i++ {
@@ -295,12 +298,12 @@ func createSymlinkedDirectories(path string, count uint, numaNodes uint) error {
 
 		// Create the target directory structure if it doesn't exist
 		if err := os.MkdirAll(fullTargetPath, 0755); err != nil {
-			return fmt.Errorf("failed to create target directory %s: %v", fullTargetPath, err)
+			return fmt.Errorf("%w, %s: %v", ErrCreateTargetDirectory, fullTargetPath, err)
 		}
 
 		// Create the symlink in the path directory pointing to the target directory
 		if err := os.Symlink(targetDir, symlinkName); err != nil {
-			return fmt.Errorf("failed to create symlink %s -> %s: %v", symlinkName, targetDir, err)
+			return fmt.Errorf("%w %s -> %s: %v", ErrCreateSymlink, symlinkName, targetDir, err)
 		}
 
 		// Determine the NUMA node for this device
@@ -308,7 +311,7 @@ func createSymlinkedDirectories(path string, count uint, numaNodes uint) error {
 
 		// Create the files inside the target directory with the corresponding NUMA node value
 		if err := createFilesInDirectory(fullTargetPath, i, numaNode); err != nil {
-			return fmt.Errorf("failed to create files in directory %s: %v", fullTargetPath, err)
+			return fmt.Errorf("%w %s: %v", ErrCreateFilesInDirectory, fullTargetPath, err)
 		}
 	}
 
@@ -327,56 +330,24 @@ func createFilesInDirectory(dir string, index uint, numaNode uint) error {
 	// Loop over the files map and create each file with the corresponding content.
 	for name, content := range files {
 		filePath := filepath.Join(dir, name)
-		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to create file %s: %v", filePath, err)
+		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil { //nolint:gosec
+			return fmt.Errorf("%w %s: %v", ErrCreateFile, filePath, err)
 		}
 	}
 
 	return nil
 }
 
-// errorString translates the HLML return code into a Go error.
-func errorString(ret HLMLReturn) error {
-	switch ret {
-	case HLML_SUCCESS, HLML_ERROR_TIMEOUT:
-		return nil
-	case HLML_ERROR_UNINITIALIZED:
-		return ErrNotIntialized
-	case HLML_ERROR_INVALID_ARGUMENT:
-		return ErrInvalidArgument
-	case HLML_ERROR_NOT_SUPPORTED:
-		return ErrNotSupported
-	case HLML_ERROR_ALREADY_INITIALIZED:
-		return ErrAlreadyInitialized
-	case HLML_ERROR_NOT_FOUND:
-		return ErrNotFound
-	case HLML_ERROR_INSUFFICIENT_SIZE:
-		return ErrInsufficientSize
-	case HLML_ERROR_DRIVER_NOT_LOADED:
-		return ErrDriverNotLoaded
-	case HLML_ERROR_AIP_IS_LOST:
-		return ErrAipIsLost
-	case HLML_ERROR_MEMORY:
-		return ErrMemoryError
-	case HLML_ERROR_NO_DATA:
-		return ErrNoData
-	case HLML_ERROR_UNKNOWN:
-		return ErrUnknownError
-	}
-
-	return errors.New("invalid HLML error return code")
-}
-
 // Initialize simulates the initialization of the HLML library.
 func (d *FakeHlml) Initialize() error {
 	// Simulate a successful initialization
-	return errorString(HLML_SUCCESS)
+	return errorString(HlmlSuccess)
 }
 
 // Shutdown simulates the shutdown of the HLML library in the fake implementation.
 func (d *FakeHlml) Shutdown() error {
 	// Simulate a successful shutdown
-	return errorString(HLML_SUCCESS)
+	return errorString(HlmlSuccess)
 }
 
 // GetDeviceTypeName simulates the retrieval of the device type name in the fake implementation.
@@ -387,7 +358,7 @@ func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 		log.Println(config.pciBasePath, info.Name())
 
 		if err != nil {
-			return fmt.Errorf("error accessing file path %q", path)
+			return fmt.Errorf("%w %q", ErrAccessFilePath, path)
 		}
 
 		if info.IsDir() {
@@ -429,7 +400,7 @@ func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 // DeviceCount simulates the retrieval of the number of Habana devices in the system.
 func (d *FakeHlml) DeviceCount() (uint, error) {
 	// Simulate returning the number of devices
-	return config.DeviceCount, errorString(HLML_SUCCESS)
+	return config.DeviceCount, errorString(HlmlSuccess)
 }
 
 // DeviceHandleBySerial simulates getting a handle to a particular device by serial number.
@@ -440,7 +411,7 @@ func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 	}
 
 	// Return an error if the device is not found
-	return nil, errors.New("could not find device with serial number")
+	return nil, ErrCouldNotFindDeviceBySerial
 }
 
 // NewEventSet simulates creating a new event set in the fake implementation.
@@ -457,13 +428,14 @@ func (d *FakeHlml) DeleteEventSet(es *EventSet) {
 // RegisterEventForDevice simulates registering an event for a device in the fake implementation.
 func (d *FakeHlml) RegisterEventForDevice(es *EventSet, event int, uuid string) error {
 	// In the fake implementation, we return success
-	return errorString(HLML_SUCCESS)
+	return errorString(HlmlSuccess)
 }
 
 // WaitForEvent simulates waiting for an event in the fake implementation.
 func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
-	// In the fake implementation, we return a fake event
-	return &Event{}, errorString(HLML_SUCCESS)
+	// In the fake implementation, we return a fake event with the first device's serial number
+	e := &Event{Serial: simulatedDevices[0].serialNumber, Etype: 0}
+	return e, errorString(HlmlSuccess)
 }
 
 // DeviceHandleByIndex simulates getting a handle to a device by its index.
@@ -473,7 +445,7 @@ func (d *FakeHlml) DeviceHandleByIndex(index uint) (Device, error) {
 		return *device, nil
 	} else {
 		// Return an error if the device is not found
-		return Device{}, errors.New("could not find device with index")
+		return Device{}, ErrCouldNotFindDeviceByIndex
 	}
 }
 
@@ -510,7 +482,7 @@ func getDeviceName(deviceID string) (string, error) {
 	case checkFamily(greco, deviceID):
 		return "greco", nil
 	default:
-		return "", errors.New("no habana devices on the system")
+		return "", ErrNoHabanaDevices
 	}
 }
 
@@ -558,7 +530,7 @@ func (d *Device) PCIID() (uint, error) {
 func (d *Device) SerialNumber() (string, error) {
 	// Return the Serial Number of the device
 	if d.serialNumber == "" {
-		return "", errors.New("SerialNumber not available")
+		return "", ErrSerialNumberUnavailable
 	}
 
 	return d.serialNumber, nil
@@ -568,7 +540,7 @@ func (d *Device) SerialNumber() (string, error) {
 func (d *Device) UUID() (string, error) {
 	// Return the UUID of the device
 	if d.uuid == "" {
-		return "", errors.New("UUID not available")
+		return "", ErrUUIDUnavailable
 	}
 
 	return d.uuid, nil
@@ -578,7 +550,7 @@ func (d *Device) UUID() (string, error) {
 func (d *Device) PCIBusID() (string, error) {
 	// Return the PCI Bus ID of the device
 	if d.pciBusID == "" {
-		return "", errors.New("PCIBusID not available")
+		return "", ErrPCIBusIDUnavailable
 	}
 
 	return d.pciBusID, nil
@@ -599,7 +571,7 @@ func (d Device) NumaNode() (*uint, error) {
 
 	node, err := strconv.ParseInt(string(bytes.TrimSpace(b)), 10, 8)
 	if err != nil {
-		return nil, fmt.Errorf("%v: %v", errors.New("failed to retrieve CPU affinity"), err)
+		return nil, fmt.Errorf("%w: %v", ErrFailedToRetrieveCPUAffinity, err)
 	}
 
 	if node < 0 {

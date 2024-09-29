@@ -26,12 +26,12 @@ import (
 
 type RealHlml struct{}
 
-// Type aliasing for the real HLML types to match the interface types
+// Type aliasing for the real HLML types to match the interface types.
 type Device = realhlml.Device
 type EventSet = realhlml.EventSet
 type Event = realhlml.Event
 
-// Prefix for sysfs and dev files
+// Prefix for sysfs and dev files.
 var prefix = ""
 
 // getHlml returns the real HLML implementation when `realhlml` build tag is used.
