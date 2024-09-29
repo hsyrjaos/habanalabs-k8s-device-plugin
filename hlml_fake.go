@@ -36,8 +36,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Device struct is a placeholder for the actual device.
-// Define Device struct with fields like PCIID, SerialNumber, UUID, etc.
+// Device struct for fake devices.
 type Device struct {
 	serialNumber string
 	uuid         string
@@ -80,6 +79,7 @@ const (
 // FakeHlml simulates the HLML library behavior
 type FakeHlml struct{}
 
+// FakeDeviceConfig is a struct that used to parse the YAML configuration for the fake devices
 type FakeDeviceConfig struct {
 	Path        string `yaml:"Path"`
 	DeviceCount uint   `yaml:"DeviceCount"`
@@ -106,6 +106,7 @@ var (
 var config FakeDeviceConfig
 var prefix string
 
+// updateConfig updates the global `config` variable with the parsed YAML configuration
 func updateConfig(yamlConfig string) error {
 	// Parse the YAML string into the Config struct
 	err := yaml.Unmarshal([]byte(yamlConfig), &config)
@@ -159,7 +160,7 @@ func initializeSimulatedDevices(config FakeDeviceConfig) {
 	}
 }
 
-// generateRandomSerialNumber creates a string like `AN45012345` where the last 4 digits are random.
+// generateRandomSerialNumber creates a string like e.g. `AN45012345` where the last 4 digits are random.
 func generateRandomSerialNumber() string {
 	const baseprefix = "FA450"
 	// Generate random last four digits
@@ -167,7 +168,7 @@ func generateRandomSerialNumber() string {
 	return baseprefix + lastFourDigits
 }
 
-// generateRandomUUID creates a string in the format `01P0-HL2080A0-15-TNBS72-05-01-02`.
+// generateRandomUUID creates a string in the format e.g. `01P0-HL2080A0-15-TNBS72-05-01-02`.
 func generateRandomUUID() string {
 	const basePrefix = "01F0-AK2080E0-15-ACC"
 
@@ -197,7 +198,6 @@ DeviceCount: 8
 NumaNodes: 2
 PciID: "1da3:1020"
 `
-
 	// Check if FAKEACCEL_SPEC environment variable is defined
 	fakeAccel := os.Getenv("FAKEACCEL_SPEC")
 	if fakeAccel != "" && fakeAccel != "default" {
@@ -215,6 +215,7 @@ PciID: "1da3:1020"
 	return &FakeHlml{}
 }
 
+// createDeviceNodes creates the device nodes for the specified number of devices
 func createDeviceNodes(path string, count uint) error {
 	// Remove the existing directory (if it exists) before creating a new one
 	if err := os.RemoveAll(path); err != nil {
@@ -275,7 +276,7 @@ func createSymlinkedDirectories(path string, count uint, numaNodes uint) error {
 		// Get the PCI Bus ID for the current device from the simulatedDevices array
 		device := simulatedDevices[i-1]
 
-		// Create the symlink name: 0000.0a.1f.<index>
+		// Create the symlink name
 		symlinkName := fmt.Sprintf("%s/%s", path, device.pciBusID)
 
 		// Extract the PCI root and the target directory path based on the PCI Bus ID
@@ -307,7 +308,7 @@ func createSymlinkedDirectories(path string, count uint, numaNodes uint) error {
 	return nil
 }
 
-// createFilesInDirectory creates the specified files in the given directory with the specified NUMA node.
+// createFilesInDirectory creates the specified files in the given directory.
 func createFilesInDirectory(dir string, index uint, numaNode uint) error {
 	// Define the file names and their contents
 	files := map[string]string{
@@ -369,6 +370,7 @@ func (d *FakeHlml) Shutdown() error {
 	return errorString(HLML_SUCCESS)
 }
 
+// GetDeviceTypeName simulates the retrieval of the device type name in the fake implementation
 func (d *FakeHlml) GetDeviceTypeName() (string, error) {
 	var deviceType string
 	err := filepath.Walk(config.pciBasePath, func(path string, info os.FileInfo, err error) error {
@@ -426,11 +428,14 @@ func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 	// Return an error if the device is not found
 	return nil, errors.New("could not find device with serial number")
 }
+
+// NewEventSet simulates creating a new event set in the fake implementation
 func (d *FakeHlml) NewEventSet() *EventSet {
 	// In the fake implementation, we simply return an empty EventSet struct
 	return &EventSet{}
 }
 
+// DeleteEventSet simulates deleting an event set in the fake implementation
 func (d *FakeHlml) DeleteEventSet(es *EventSet) {
 	// In the fake implementation, we do nothing
 }
@@ -441,6 +446,7 @@ func (d *FakeHlml) RegisterEventForDevice(es *EventSet, event int, uuid string) 
 	return errorString(HLML_SUCCESS)
 }
 
+// WaitForEvent simulates waiting for an event in the fake implementation
 func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
 	// In the fake implementation, we return a fake event
 	return &Event{}, errorString(HLML_SUCCESS)
@@ -494,6 +500,7 @@ func getDeviceName(deviceID string) (string, error) {
 	}
 }
 
+// checkFamily checks if the device ID belongs to the specified family
 func checkFamily(family []string, id string) bool {
 	for _, m := range family {
 		if strings.HasSuffix(id, m) {
@@ -503,6 +510,7 @@ func checkFamily(family []string, id string) bool {
 	return false
 }
 
+// readIDFromFile reads the ID from the specified file
 func readIDFromFile(basePath string, deviceAddress string, property string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(basePath, deviceAddress, property))
 	if err != nil {
@@ -512,6 +520,7 @@ func readIDFromFile(basePath string, deviceAddress string, property string) (str
 	return id, nil
 }
 
+// PCIID returns the PCI ID of the device
 func (d *Device) PCIID() (uint, error) {
 	// Split the vendor and device parts
 	vendor, device := strings.Split(d.pciID, ":")[0], strings.Split(d.pciID, ":")[1]
@@ -527,6 +536,7 @@ func (d *Device) PCIID() (uint, error) {
 	return uint(result), nil
 }
 
+// SerialNumber returns the Serial Number of the device
 func (d *Device) SerialNumber() (string, error) {
 	// Return the Serial Number of the device
 	if d.serialNumber == "" {
@@ -535,6 +545,7 @@ func (d *Device) SerialNumber() (string, error) {
 	return d.serialNumber, nil
 }
 
+// UUID returns the UUID of the device
 func (d *Device) UUID() (string, error) {
 	// Return the UUID of the device
 	if d.uuid == "" {
@@ -543,6 +554,7 @@ func (d *Device) UUID() (string, error) {
 	return d.uuid, nil
 }
 
+// PCIBusID returns the PCI Bus ID of the device
 func (d *Device) PCIBusID() (string, error) {
 	// Return the PCI Bus ID of the device
 	if d.pciBusID == "" {
