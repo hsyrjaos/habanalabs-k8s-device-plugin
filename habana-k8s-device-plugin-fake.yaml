@@ -1,4 +1,4 @@
-# Copyright (c) 2022, HabanaLabs Ltd.  All rights reserved.
+# Copyright (c) 2024, Intel Corporation.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ metadata:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: habanalabs-device-plugin-daemonset
+  name: habanalabs-device-plugin-fake-daemonset
   namespace: habana-system
 spec:
   selector:
@@ -41,16 +41,19 @@ spec:
       priorityClassName: "system-node-critical"
       containers:
       #- image: vault.habana.ai/docker-k8s-device-plugin/docker-k8s-device-plugin:latest
-      - image: registry.local/docker-k8s-device-plugin:1.16.0-526
+      - image: registry.local/docker-k8s-device-plugin:latest
         imagePullPolicy: Always 
         name: habanalabs-device-plugin-ctr
         env:
         - name: FAKEACCEL_SPEC
           value: |
             Path: "/tmp/gaudi2" # Same as mounts below
+            HLDevice: "HL2080A0"
             DeviceCount: 8
             NumaNodes: 2
             PciID: "1da3:1020"
+            UnhealthyFreq: 0.0
+            TimeoutFreq: 0.0
         securityContext:
            privileged: true
         volumeMounts:

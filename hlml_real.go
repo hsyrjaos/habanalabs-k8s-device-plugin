@@ -1,6 +1,6 @@
 // hlml_real.go
-//go:build !fakehlml
-// +build !fakehlml
+//go:build !fake
+// +build !fake
 
 /*
  * Copyright (c) 2024, Intel Corporation.  All rights reserved.

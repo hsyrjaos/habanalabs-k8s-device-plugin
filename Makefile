@@ -16,16 +16,16 @@ DOCKER ?= docker
 
 include $(CURDIR)/versions.mk
 
+IMAGE_NAME := $(PUSH_REGISTRY)/$(APP_NAME)
 
-ifeq ($(IMAGE_NAME),)
-IMAGE_NAME := $(REGISTRY)/$(APP_NAME)
+ifeq ($(IMAGE_TAG),)
+# If IMAGE_TAG is not defined, assign it based on VERSION and MINOR_VERSION
+IMAGE_TAG := $(VERSION)-$(MINOR_VERSION)
 endif
-
-IMAGE_TAG ?= $(VERSION)-$(MINOR_VERSION)
 
 # option to ovveride by user request(e.g: CD)
 IMAGE ?= $(IMAGE_NAME):$(IMAGE_TAG)
-BASE_IMAGE ?= ${REGISTRY}/gaudi-docker/${VERSION}/${DIST}/habanalabs/pytorch-installer-2.2.2:${VERSION}-${MINOR_VERSION}
+BASE_IMAGE ?= ${REGISTRY}/gaudi-docker/${VERSION}/${DIST}/habanalabs/pytorch-installer-$(INSTALLER_VERSION):$(IMAGE_TAG)
 
 .PHONY: build push
 

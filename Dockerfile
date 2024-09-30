@@ -16,7 +16,7 @@ ARG VERSION=1.16.0
 
 # Stage 0: Use the BASE_IMAGE as a named stage to extract Habana libraries
 ARG BASE_IMAGE
-FROM ${BASE_IMAGE} as habana_base
+FROM ${BASE_IMAGE} as habana_tools_base
 
 # Use official Golang image for building the binaries
 FROM golang:1.21.5 AS builder
@@ -33,7 +33,7 @@ ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 WORKDIR /go/src/habanalabs-device-plugin
 
 # Copy Habana libraries required for building
-COPY --from=habana_base /usr/lib/habanalabs /usr/lib/habanalabs
+COPY --from=habana_tools_base /usr/lib/habanalabs /usr/lib/habanalabs
 
 # Copy source code
 COPY . .
@@ -58,9 +58,11 @@ RUN apt update && apt install -y --no-install-recommends \
 # Copy the built binaries from the builder stage
 COPY --from=builder /go/src/habanalabs-device-plugin/bin/habanalabs-device-plugin /usr/bin/habanalabs-device-plugin
 COPY --from=builder /go/src/habanalabs-device-plugin/bin/habanalabs-device-plugin-fake /usr/bin/habanalabs-device-plugin-fake
-
 # Copy Habana libraries from the base image stage (habana_base)
-COPY --from=habana_base /usr/lib/habanalabs/libhlml.so /usr/lib/habanalabs/libhlml.so
+COPY --from=habana_tools_base /usr/lib/habanalabs/libhlml.so /usr/lib/habanalabs/libhlml.so
+
+# Copy Habana smi tool from the base image stage (habana_base)
+COPY --from=habana_tools_base /usr/bin/hl-smi /usr/bin/hl-smi
 
 # Configure dynamic linker run-time bindings
 RUN echo "/usr/lib/habanalabs/" >> /etc/ld.so.conf.d/habanalabs.conf && ldconfig

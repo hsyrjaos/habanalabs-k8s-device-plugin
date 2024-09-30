@@ -16,8 +16,17 @@ APP_NAME := docker-k8s-device-plugin
 
 REGISTRY ?= vault.habana.ai
 
-VERSION ?= 1.16.0
+PUSH_REGISTRY ?= registry.local
+
+VERSION ?= 1.17.0
+#1.16.0
 MINOR_VERSION ?= 526
+
+IMAGE_TAG ?= latest
+
+INSTALLER_VERSION ?= 2.3.1
+#1.2.2
+
 DIST ?= ubuntu22.04
 
 GOLANG_VERSION ?= 1.21.5

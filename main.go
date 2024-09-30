@@ -38,6 +38,8 @@ func main() {
 	// Initialize the global variable
 	hlml = getHlml()
 
+	hlml = getVerboseHlml(hlml)
+
 	log := initLogger()
 	if err := run(log); err != nil {
 		log.Error(err.Error())

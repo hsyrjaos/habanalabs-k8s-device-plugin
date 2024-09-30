@@ -158,8 +158,8 @@ func watchXIDs(ctx context.Context, devs []*pluginapi.Device, xids chan<- *plugi
 				continue
 			}
 
-			uuid, err := dev.UUID()
-			if err != nil || len(uuid) == 0 {
+			serial, err := dev.SerialNumber() // BUG: fix this was before UUID
+			if err != nil || len(serial) == 0 {
 				slog.Error("XidCriticalError: All devices will go unhealthy", "xid", e.Etype)
 				// All devices are unhealthy
 				for _, d := range devs {
@@ -169,7 +169,7 @@ func watchXIDs(ctx context.Context, devs []*pluginapi.Device, xids chan<- *plugi
 			}
 
 			for _, d := range devs {
-				if d.ID == uuid {
+				if d.ID == serial {
 					slog.Error("XidCriticalError: the device will go unhealthy", "xid", e.Etype, "aip", d.ID)
 					xids <- d
 				}

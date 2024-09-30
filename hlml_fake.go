@@ -1,6 +1,6 @@
 // hlml_fake.go
-//go:build fakehlml
-// +build fakehlml
+//go:build fake
+// +build fake
 
 /*
  * Copyright (c) 2024, Intel Corporation.  All rights reserved.
@@ -62,19 +62,27 @@ type FakeHlml struct{}
 
 // FakeDeviceConfig is a struct that used to parse the YAML configuration for the fake devices.
 type FakeDeviceConfig struct {
-	Path        string `yaml:"Path"`
-	PciID       string `yaml:"PciID"`
-	pciBasePath string
-	devBasePath string
-	DeviceCount uint `yaml:"DeviceCount"`
-	NumaNodes   uint `yaml:"NumaNodes"`
+	Path          string `yaml:"Path"`
+	PciID         string `yaml:"PciID"`
+	HLDevice      string `yaml:"HLDevice"`
+	pciBasePath   string
+	devBasePath   string
+	DeviceCount   uint    `yaml:"DeviceCount"`
+	NumaNodes     uint    `yaml:"NumaNodes"`
+	UnhealthyFreq float64 `yaml:"UnhealthyFreq"`
+	TimeoutFreq   float64 `yaml:"TimeoutFreq"`
 }
-
-// EventType defines the type of event.
-const HlmlCriticalError = 1 << 1
 
 // HlmlSuccess defines the success return code to fake device no errors needed.
 const HlmlSuccess HLMLReturn = 0
+const HlmlErrorTimeout HLMLReturn = 10
+
+// EventType defines the type of event.
+const (
+	HlmlEventEccErr      = 1 << 0 // Event about ECC errors
+	HlmlEventCriticalErr = 1 << 1 // Event about critical errors that occurred on the device
+	HlmlEventClockRate   = 1 << 2 // Event about changes in clock rate
+)
 
 var (
 	ErrInvalidHlmlErrorCode        = errors.New("invalid HLML error return code")
@@ -94,6 +102,7 @@ var (
 	ErrUUIDUnavailable             = errors.New("UUID not available")
 	ErrPCIBusIDUnavailable         = errors.New("PCIBusID not available")
 	ErrFailedToRetrieveCPUAffinity = errors.New("failed to retrieve CPU affinity")
+	ErrEventTimeout                = errors.New("event timeout")
 )
 
 // Global variables holding the simulated devices.
@@ -102,6 +111,8 @@ var (
 	prefix                   string
 	simulatedDevices         map[uint]*Device   // Access devices by index
 	simulatedDevicesBySerial map[string]*Device // Access devices by serial number
+	// Global map to track registered events by UUID.
+	registeredEventsByUUID = make(map[string][]int)
 )
 
 // errorString translates the HLML return code into a Go error.
@@ -109,6 +120,8 @@ func errorString(ret HLMLReturn) error {
 	switch ret {
 	case HlmlSuccess:
 		return nil
+	case HlmlErrorTimeout:
+		return fmt.Errorf("hlml: %w", ErrEventTimeout)
 	}
 
 	return ErrInvalidHlmlErrorCode
@@ -166,44 +179,54 @@ func initializeSimulatedDevices(config FakeDeviceConfig) {
 
 // generateRandomSerialNumber creates a string like e.g. `AN45012345` where the last 4 digits are random.
 func generateRandomSerialNumber() string {
-	const baseprefix = "FA450"
-	// Generate random last four digits.
+	const baseprefix = "FK" //YYXXXXXXXX
+	// Generate random last eight digits.
 	// Create a new random generator instance.
-	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
-	lastFourDigits := fmt.Sprintf("%04d", rng.Intn(10000)) // Random number between 0000 and 9999
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))     //nolint:gosec
+	lastFourDigits := fmt.Sprintf("%08d", rng.Intn(100000000)) // Random number between 00000000 and 99999999
 
 	return baseprefix + lastFourDigits
 }
 
 // generateRandomUUID creates a string in the format e.g. `01P0-HL2080A0-15-TNBS72-05-01-02`.
 func generateRandomUUID() string {
-	const basePrefix = "01F0-AK2080E0-15-ACC"
-
+	/*
+		Alphanumeric string made up of table_version, device_ID, FAB#, LOT#, Wafer#, X Coordinate, Y Coordinate. Example: 00P1-HL2000B0-14-P63B83-04-08-10
+	*/
 	// Define possible suffixes
-	suffixes := []string{"EL2", "EL2", "EL1"}
+	lots := []string{"P73B93", "TNBR62", "P53B53", "TNBR72"}
 
 	// Create a new random generator instance
 	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
 
-	// Select a random suffix using the local random generator
-	suffix := suffixes[rng.Intn(len(suffixes))]
+	// Select a random lot using the local random generator
+	lot := lots[rng.Intn(len(lots))]
 
-	// Generate a random date part
-	hour := fmt.Sprintf("%02d", rng.Intn(24))    // Random hour between 00-23
-	month := fmt.Sprintf("%02d", rng.Intn(12)+1) // Random month between 01-12
-	day := fmt.Sprintf("%02d", rng.Intn(28)+1)   // Random day between 01-28
+	fab := "99"
+
+	deviceID := config.HLDevice
+
+	tableVersion := "01F0"
+
+	// Generate a random w,x,y parts
+	yCoord := fmt.Sprintf("%02d", rng.Intn(24))   // Random between 00-50
+	wafer := fmt.Sprintf("%02d", rng.Intn(12)+1)  // Random between 00-50
+	xCoord := fmt.Sprintf("%02d", rng.Intn(28)+1) // Random between 00-50
 
 	// Construct and return the final UUID string
-	return fmt.Sprintf("%s%s-%s-%s-%s", basePrefix, suffix, month, day, hour)
+	return fmt.Sprintf("%s-%s-%s-%s-%s-%s-%s", tableVersion, deviceID, fab, lot, wafer, xCoord, yCoord)
 }
 
 // getHlml returns the fake HLML implementation when `realhlml` build tag is not used.
 func getHlml() Hlml {
 	yamlContent := `
 Path: "/tmp/gaudi2"
+HLDevice: "HL2080F0"
 DeviceCount: 8
 NumaNodes: 2
 PciID: "1da3:1020"
+UnhealthyFreq: 0.1
+TimeoutFreq: 0.1
 `
 	// Check if FAKEACCEL_SPEC environment variable is defined
 	fakeAccel := os.Getenv("FAKEACCEL_SPEC")
@@ -416,26 +439,71 @@ func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 
 // NewEventSet simulates creating a new event set in the fake implementation.
 func (d *FakeHlml) NewEventSet() *EventSet {
-	// In the fake implementation, we simply return an empty EventSet struct
+	// Simulate creating a new event set
 	return &EventSet{}
 }
 
 // DeleteEventSet simulates deleting an event set in the fake implementation.
 func (d *FakeHlml) DeleteEventSet(es *EventSet) {
-	// In the fake implementation, we do nothing
+	// Simulate deleting the event se
 }
 
 // RegisterEventForDevice simulates registering an event for a device in the fake implementation.
 func (d *FakeHlml) RegisterEventForDevice(es *EventSet, event int, uuid string) error {
-	// In the fake implementation, we return success
+	// Add the event to the registeredEventsByUUID map
+	// Actual uuid is the serial number of the device
+	registeredEventsByUUID[uuid] = append(registeredEventsByUUID[uuid], event)
 	return errorString(HlmlSuccess)
 }
 
 // WaitForEvent simulates waiting for an event in the fake implementation.
 func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
-	// In the fake implementation, we return a fake event with the first device's serial number
-	e := &Event{Serial: simulatedDevices[0].serialNumber, Etype: 0}
-	return e, errorString(HlmlSuccess)
+	// Create a random number generator.
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
+
+	// Select a random device index within the range of DeviceCount.
+	randomIndex := uint(rng.Intn(int(config.DeviceCount)))
+	device, found := simulatedDevices[randomIndex]
+	if !found {
+		return nil, ErrCouldNotFindDeviceByIndex // Return an error if the device is not found
+	}
+
+	// Get the serial number of the randomly selected device.
+	serialNumber, err := device.SerialNumber()
+	if err != nil {
+		return nil, err
+	}
+
+	if events, exists := registeredEventsByUUID[serialNumber]; exists {
+		// Check if this device has the registered event we want
+		if isEventRegistered(events, HlmlEventCriticalErr) {
+			// Determine if a timeout should be simulated based on the TimeoutFrequency.
+			if rng.Float64() < config.TimeoutFreq {
+				time.Sleep(time.Duration(timeout) * time.Millisecond) // Simulate waiting for the event.
+				return nil, errorString(HlmlErrorTimeout)
+			}
+			// Determine if the device should return a critical error event based on the UnhealthyFrequency.
+			if rng.Float64() < config.UnhealthyFreq {
+				// Return a critical error event with the randomly selected device's serial number.
+				e := &Event{Serial: serialNumber, Etype: HlmlEventCriticalErr}
+				return e, nil
+			}
+		}
+	}
+
+	// In the default case, we return a fake event indicating a healthy status.
+	e := &Event{Serial: serialNumber, Etype: 0}
+	return e, nil
+}
+
+// isEventRegistered checks if a specific event is in the list of registered events.
+func isEventRegistered(events []int, event int) bool {
+	for _, registeredEvent := range events {
+		if registeredEvent == event {
+			return true
+		}
+	}
+	return false
 }
 
 // DeviceHandleByIndex simulates getting a handle to a device by its index.
