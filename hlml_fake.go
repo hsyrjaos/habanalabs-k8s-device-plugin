@@ -47,7 +47,9 @@ type Device struct {
 }
 
 // EventSet is a fake implementation of the HLML event set.
-type EventSet struct{}
+type EventSet struct {
+	Address string // Simulate a unique "address" for each EventSet using a pointer-like value.
+}
 
 // Event is a fake implementation of the HLML event.
 type Event struct {
@@ -437,10 +439,19 @@ func (d *FakeHlml) DeviceHandleBySerial(serial string) (*Device, error) {
 	return nil, ErrCouldNotFindDeviceBySerial
 }
 
+// generateFakePointer simulates generating a realistic memory address.
+func generateFakePointer() string {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) // Create a new RNG seed for each pointer.
+	return fmt.Sprintf("0x%x", uintptr(rng.Int63()))       // Use a random 63-bit integer as a fake pointer address.
+}
+
 // NewEventSet simulates creating a new event set in the fake implementation.
 func (d *FakeHlml) NewEventSet() *EventSet {
-	// Simulate creating a new event set
-	return &EventSet{}
+	// Use a counter or unique address to create a more realistic EventSet representation.
+	eventSet := &EventSet{
+		Address: generateFakePointer(),
+	}
+	return eventSet
 }
 
 // DeleteEventSet simulates deleting an event set in the fake implementation.
@@ -474,12 +485,14 @@ func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
 		return nil, err
 	}
 
+	time.Sleep(time.Duration(timeout-1) * time.Millisecond) // Simulate waiting for the event.
+
 	if events, exists := registeredEventsByUUID[serialNumber]; exists {
 		// Check if this device has the registered event we want
 		if isEventRegistered(events, HlmlEventCriticalErr) {
 			// Determine if a timeout should be simulated based on the TimeoutFrequency.
 			if rng.Float64() < config.TimeoutFreq {
-				time.Sleep(time.Duration(timeout) * time.Millisecond) // Simulate waiting for the event.
+				time.Sleep(time.Duration(1) * time.Millisecond) // Simulate waiting for the event.
 				return nil, errorString(HlmlErrorTimeout)
 			}
 			// Determine if the device should return a critical error event based on the UnhealthyFrequency.
@@ -492,7 +505,7 @@ func (d *FakeHlml) WaitForEvent(es *EventSet, timeout int) (*Event, error) {
 	}
 
 	// In the default case, we return a fake event indicating a healthy status.
-	e := &Event{Serial: serialNumber, Etype: 0}
+	e := &Event{Etype: 0}
 	return e, nil
 }
 

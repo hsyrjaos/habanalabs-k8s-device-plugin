@@ -45,7 +45,7 @@ RUN go mod tidy
 RUN go build -buildvcs=false -o bin/habanalabs-device-plugin .
 
 # Build the fake version with `-tags=fakehlml`
-RUN go build -tags=fakehlml -buildvcs=false -o bin/habanalabs-device-plugin-fake .
+RUN go build -tags=fake -buildvcs=false -o bin/habanalabs-device-plugin-fake .
 
 # Create the final runtime image using minimal `ubuntu` base image
 FROM ubuntu:22.04
